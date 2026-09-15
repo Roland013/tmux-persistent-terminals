@@ -2,7 +2,7 @@
   "name": "tmux-persistent-terminals",
   "displayName": "tmux Persistent Terminals for VS Code",
   "description": "Use tmux through familiar VS Code terminal tabs. Keep programs running when you disconnect, and return to the same terminals when you reconnect.",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "publisher": "Roland013",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
