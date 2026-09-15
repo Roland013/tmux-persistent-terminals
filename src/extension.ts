@@ -92,6 +92,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // --- Clean up when the extension host shuts down ----------------------
     // Note: we do NOT disconnect from tmux — we want sessions to outlive VS Code.
+    // `disposing` is only a secondary guard on the kill path: a remote host may
+    // drop the workbench connection without ever deactivating us, so
+    // TmuxTerminal decides a window's fate from the terminal's exit reason
+    // rather than from whether this ran in time.
     context.subscriptions.push({
         dispose: () => {
             disposing = true;
@@ -124,7 +128,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // is treated as a stray when both gates are satisfied. Restored
     // tmux-backed tabs go through `provideTerminalProfile` and acquire
     // a TmuxTerminal pty, so they are never disposed here.
-    const stray = vscode.window.terminals.filter((t) => !looksLikeTmuxTerminal(t));
+    const stray = vscode.window.terminals.filter(
+        (t) => !looksLikeTmuxTerminal(t) && !getTmuxPtyFromTerminal(t),
+    );
     if (stray.length > 0) {
         const cfgRoot = vscode.workspace.getConfiguration('tmux-integrated');
         const closeStray = cfgRoot.get<boolean>('closeStrayShellsOnActivation', true);
@@ -196,7 +202,12 @@ function registerTerminalRenameSync(context: vscode.ExtensionContext): void {
     };
 
     const untrackTerminal = (terminal: vscode.Terminal): void => {
+        const pty = terminalPtyByTerminal.get(terminal) ?? getTmuxPtyFromTerminal(terminal);
         terminalPtyByTerminal.delete(terminal);
+        // Hand the pty the reason VS Code gives for the tab disappearing so it
+        // can tell a deliberate close (kill the tmux window) from a window
+        // reload or workspace switch (keep it). See TmuxTerminal.close().
+        pty?.noteTerminalExitReason(terminal.exitStatus?.reason);
     };
 
     const syncActiveTerminalToTmuxWindow = async (terminal: vscode.Terminal | undefined): Promise<void> => {

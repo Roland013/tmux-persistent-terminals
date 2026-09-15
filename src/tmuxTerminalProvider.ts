@@ -6,8 +6,9 @@
 *   handleInput() → forwards key data through tmux control commands.
  *   setDimensions() → updates the control client window size for the tmux
  *                     window shown in this VS Code terminal.
- *   close()       → kills the tmux window (unless VS Code is shutting down,
- *                   in which case the window survives for later re-adoption).
+ *   close()       → kills the tmux window only when the user closed the tab;
+ *                   a window/workspace teardown leaves it alive for later
+ *                   re-adoption (see resolveWindowFate).
  */
 
 import * as vscode from 'vscode';
@@ -131,6 +132,30 @@ function findEscSequenceLength(data: string, start: number): number {
     return 0;
 }
 
+/**
+ * How long `close()` waits for VS Code to report *why* the tab went away
+ * before giving up and leaving the tmux window alive.
+ *
+ * The workbench sends `$acceptProcessShutdown` (which invokes `close()`) and
+ * `$acceptTerminalClosed` (which fires `onDidCloseTerminal` carrying
+ * `exitStatus.reason`) back-to-back from the same `TerminalInstance.dispose()`
+ * call, over the same RPC channel, so the reason lands a tick later even on a
+ * high-latency Remote-SSH link. The grace only exists so that a host which
+ * never delivers the second message produces a log line instead of silence.
+ */
+const EXIT_REASON_GRACE_MS = 2_000;
+
+function describeTerminalExitReason(reason: vscode.TerminalExitReason | undefined): string {
+    switch (reason) {
+        case vscode.TerminalExitReason.Shutdown: return 'Shutdown (window closed or reloaded)';
+        case vscode.TerminalExitReason.Process: return 'Process (shell exited)';
+        case vscode.TerminalExitReason.User: return 'User (tab closed)';
+        case vscode.TerminalExitReason.Extension: return 'Extension (disposed by an extension)';
+        case vscode.TerminalExitReason.Unknown: return 'Unknown';
+        default: return 'not reported';
+    }
+}
+
 export class TmuxTerminal implements vscode.Pseudoterminal {
     private readonly writeEmitter = new vscode.EventEmitter<string>();
     private readonly closeEmitter = new vscode.EventEmitter<number | void>();
@@ -145,6 +170,12 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
     /** tmux window_index for tab labels (`tmux:&lt;n&gt;` when automatic-rename is on). */
     private tabWindowIndex: number | undefined = undefined;
     private windowClosedByTmux = false;
+    /** Set by close() when the tmux window is still ours to keep or kill. */
+    private pendingCloseWindowId: string | null = null;
+    private exitReason: vscode.TerminalExitReason | undefined;
+    private exitReasonReported = false;
+    private exitReasonTimer: ReturnType<typeof setTimeout> | null = null;
+    private windowFateResolved = false;
     private readonly existingWindow: {
         windowId: string;
         paneId: string;
@@ -585,26 +616,82 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
     close(): void {
         // Capture state before cleanup clears listeners.
         const windowId = this.windowId;
-        const shouldConsiderKill = !this.windowClosedByTmux
-            && !!windowId
-            && this.client.isConnected();
-
         this.cleanup();
 
-        if (shouldConsiderKill) {
-            // Defer briefly so that VS Code's shutdown path can call
-            // deactivate() and disconnect the client first.  This
-            // prevents killing tmux windows when VS Code exits —
-            // persistence is preserved.
-            const client = this.client;
-            const isDeactivating = this.isDeactivating;
-            setTimeout(() => {
-                if (!isDeactivating() && client.isConnected()) {
-                    client.sendCommand(`kill-window -t ${windowId}`)
-                        .catch(() => {});
-                }
-            }, 300);
+        if (this.windowClosedByTmux || !windowId) {
+            // tmux already disposed of the window (shell exit, kill-window
+            // from another client): nothing left to decide.
+            return;
         }
+
+        this.pendingCloseWindowId = windowId;
+        this.log(`close(): tab for window ${windowId} closed, exit reason ${this.exitReasonReported ? describeTerminalExitReason(this.exitReason) : 'pending'}`);
+
+        if (!this.exitReasonReported) {
+            this.exitReasonTimer = setTimeout(() => {
+                this.exitReasonTimer = null;
+                if (this.windowFateResolved) { return; }
+                this.windowFateResolved = true;
+                this.log(
+                    `close(): VS Code reported no exit reason within ${EXIT_REASON_GRACE_MS}ms — ` +
+                    `leaving tmux window ${windowId} alive`,
+                );
+            }, EXIT_REASON_GRACE_MS);
+        }
+
+        this.resolveWindowFate();
+    }
+
+    /**
+     * Report the `terminal.exitStatus.reason` VS Code attached to this
+     * terminal's disposal. Wired up from `onDidCloseTerminal` in extension.ts
+     * (no VS Code API hands the reason to a `Pseudoterminal` directly).
+     *
+     * This is the only trustworthy way to tell "the user closed this tab"
+     * apart from "the window is going away" — the two used to be separated by
+     * racing `close()` against `deactivate()` on a timer, which a Remote-SSH
+     * host loses whenever it tears the workbench connection down without
+     * deactivating the extension first. Losing that race killed every tmux
+     * window in the session, and with the last window the session itself.
+     */
+    noteTerminalExitReason(reason: vscode.TerminalExitReason | undefined): void {
+        this.exitReason = reason;
+        this.exitReasonReported = true;
+        this.resolveWindowFate();
+    }
+
+    /**
+     * Decide once, when both halves of the close are known, whether the tmux
+     * window dies with the tab. Anything short of an explicit close leaves it
+     * running: a stale window costs the user one extra tab on the next open,
+     * a wrongly-killed one costs them their work.
+     */
+    private resolveWindowFate(): void {
+        const windowId = this.pendingCloseWindowId;
+        if (this.windowFateResolved || !windowId || !this.exitReasonReported) {
+            return;
+        }
+        this.windowFateResolved = true;
+        if (this.exitReasonTimer) {
+            clearTimeout(this.exitReasonTimer);
+            this.exitReasonTimer = null;
+        }
+
+        const reason = describeTerminalExitReason(this.exitReason);
+        const tabClosedDeliberately = this.exitReason === vscode.TerminalExitReason.User
+            || this.exitReason === vscode.TerminalExitReason.Extension;
+
+        if (!tabClosedDeliberately) {
+            this.log(`close(): keeping tmux window ${windowId} alive for re-adoption — exit reason ${reason}`);
+            return;
+        }
+        if (this.isDeactivating() || !this.client.isConnected()) {
+            this.log(`close(): keeping tmux window ${windowId} alive — extension is shutting down`);
+            return;
+        }
+
+        this.log(`close(): killing tmux window ${windowId} — exit reason ${reason}`);
+        this.client.sendCommand(`kill-window -t ${windowId}`).catch(() => {});
     }
 
     // -----------------------------------------------------------------------

@@ -16,9 +16,10 @@ VS Code terminal breaks things:
 
 **tmux-integrated** solves all three.  tmux runs in the background as a session
 manager; VS Code owns the visual layer.  Each VS Code terminal tab corresponds
-to one tmux window.  Closing the tab **does not kill the tmux window** — the
-process keeps running.  When you reconnect you can open a new terminal and
-continue where you left off.
+to one tmux window.  Closing a tab closes its tmux window, but closing,
+reloading, or switching the workspace of the VS Code window **leaves the
+session running** — when you come back its windows reappear as tabs with your
+processes still alive.
 
 ## Features
 

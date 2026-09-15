@@ -302,8 +302,10 @@ Write-queue invariants:
 * Disconnect on extension dispose: `client.disconnect()` writes `detach\r`,
   kills the PTY. The tmux server keeps running and the session keeps its
   windows.
-* `deactivate()` sets `disposing = true` so that `TmuxTerminal.close()` does
-  not kill its window during shutdown.
+* `TmuxTerminal.close()` kills its tmux window only when the tab was closed
+  deliberately — see *"Switching workspace killed my tmux session"* below.
+  `deactivate()` sets `disposing = true`, which is a secondary guard on that
+  path rather than the thing that makes shutdown safe.
 * On the *next* activation, if `tmuxSessionExists()` returns true,
   `autoConnectExistingSession()` re-attaches to the same session and
   re-creates VS Code tabs from `listWindows()` output.
@@ -380,6 +382,37 @@ name (`tmux:<n>`) is displayed until the real title round-trips.
 shown (seeded with the creation-options name) and only treats names outside
 that set as user renames. See *Tab title model* above. Covered by unit,
 integration, and real-tmux e2e tests in `test/`.
+
+### "Switching workspace killed my tmux session"
+
+A tmux window dies with its tab when the user closes the tab, and survives
+when the whole workbench window goes away. `close()` is called in both cases
+and the `Pseudoterminal` API does not say which happened, so the two used to
+be told apart by timing: `close()` scheduled `kill-window` 300ms out and
+`deactivate()` cancelled it by setting `disposing = true`.
+
+Nothing guarantees `deactivate()` runs first, or at all. A remote host can
+drop the workbench connection and leave the extension host process alive
+(waiting for a reconnect) after the terminal disposals have already been
+delivered. `disposing` then stays `false`, the timers fire, and every window
+in the session is killed — and killing the last window kills the session,
+taking the user's running processes with it. Local hosts terminate the
+extension host promptly, so this only showed up over Remote-SSH.
+
+*Mitigation:* decide from intent, not timing. `TerminalInstance.dispose()`
+tags every disposal with a `TerminalExitReason` (`Shutdown` for a window
+close or reload, `User` for a closed tab) and the workbench forwards it in
+`terminal.exitStatus.reason`. `onDidCloseTerminal` in `extension.ts` hands
+that reason to `TmuxTerminal.noteTerminalExitReason()`, and
+`resolveWindowFate()` kills the window only for `User` / `Extension`.
+
+The workbench sends `$acceptProcessShutdown` (→ `close()`) and
+`$acceptTerminalClosed` (→ `onDidCloseTerminal`) back-to-back over the same
+RPC channel, so the reason arrives a tick after `close()` however slow the
+link is. If it never arrives — a host that cannot deliver the second message
+at all — the window is left alive and a line is written to the output
+channel. A stale window costs one extra tab on the next open; a wrongly
+killed one costs the user their work.
 
 ## Things that are intentionally absent
 
