@@ -124,13 +124,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     //   - `terminal.integrated.defaultProfile.<os>` === `tmux-integrated`
     //     (so users who deliberately mix profiles are never affected)
     //
-    // Any tab that does not look like one of ours (`tmux` or `tmux:N`)
-    // is treated as a stray when both gates are satisfied. Restored
-    // tmux-backed tabs go through `provideTerminalProfile` and acquire
-    // a TmuxTerminal pty, so they are never disposed here.
-    const stray = vscode.window.terminals.filter(
-        (t) => !looksLikeTmuxTerminal(t) && !getTmuxPtyFromTerminal(t),
-    );
+    // Terminal labels are not ownership: another extension can own a tab
+    // named "bash", and a tmux window can have any user-assigned name.
+    const stray = vscode.window.terminals.filter((t) => !isExtensionOwnedTerminal(t));
     if (stray.length > 0) {
         const cfgRoot = vscode.workspace.getConfiguration('tmux-integrated');
         const closeStray = cfgRoot.get<boolean>('closeStrayShellsOnActivation', true);
@@ -170,8 +166,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
     disposing = true;
+    await flushRenames();
     terminalPtyByTerminal.clear();
     pendingTerminalPtys.length = 0;
     activeTmuxWindowId = null;
@@ -243,16 +240,44 @@ function registerTerminalRenameSync(context: vscode.ExtensionContext): void {
         vscode.window.onDidOpenTerminal((terminal) => {
             trackTerminal(terminal);
             // VS Code may not focus terminal when it is opened
-            if(pendingUserTerminalFocus && looksLikeTmuxTerminal(terminal)) {
+            if (pendingUserTerminalFocus && isTmuxTerminal(terminal)) {
                 terminal.show();
                 pendingUserTerminalFocus = false;
             }
         }),
-        vscode.window.onDidCloseTerminal(untrackTerminal),
+        vscode.window.onDidCloseTerminal((terminal) => {
+            void syncTerminalName(terminal);
+            untrackTerminal(terminal);
+        }),
         vscode.window.onDidChangeActiveTerminal((terminal) => {
+            void flushRenames();
             void syncActiveTerminalToTmuxWindow(terminal);
         }),
+        vscode.window.onDidChangeWindowState(() => {
+            void flushRenames();
+        }),
     );
+}
+
+/** Catch built-in renames without duplicating the PTY's title classification. */
+async function syncTerminalName(terminal: vscode.Terminal): Promise<void> {
+    const pty = terminalPtyByTerminal.get(terminal) ?? getTmuxPtyFromTerminal(terminal);
+    await pty?.maybeSyncNameFromVsCode(terminal.name);
+}
+
+/** Finish pending tab-name writes before disconnecting the control client. */
+async function flushRenames(): Promise<void> {
+    await Promise.all([...terminalPtyByTerminal.keys()].map(syncTerminalName));
+}
+
+/** Preserve terminals owned by any extension during the stray-shell sweep. */
+function isExtensionOwnedTerminal(terminal: vscode.Terminal): boolean {
+    return !!terminal.creationOptions && 'pty' in terminal.creationOptions;
+}
+
+/** Identify this extension's terminals independently of their visible labels. */
+function isTmuxTerminal(terminal: vscode.Terminal): boolean {
+    return terminalPtyByTerminal.has(terminal) || getTmuxPtyFromTerminal(terminal) !== null;
 }
 
 function getTmuxPtyFromTerminal(terminal: vscode.Terminal): TmuxTerminal | null {
@@ -883,7 +908,7 @@ async function autoConnectExistingSession(): Promise<void> {
     // is still something to adopt — otherwise the listener does nothing
     // and we exit on the initial grace.
     disposable = vscode.window.onDidOpenTerminal((terminal) => {
-        if (windowsToAdopt.length > 0 && looksLikeTmuxTerminal(terminal)) {
+        if (windowsToAdopt.length > 0 && isTmuxTerminal(terminal)) {
             armTimer(AUTO_CONNECT_QUIET_GRACE_MS, 'quiet grace expired after VS Code restore');
         }
     });

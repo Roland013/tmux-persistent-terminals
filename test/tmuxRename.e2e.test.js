@@ -243,5 +243,34 @@ test(
 
       pty.close();
     });
+
+    await t.test('new windows append after gaps in tmux indices', async () => {
+      const middle = await client.newWindow({ shell: '/bin/bash' });
+      const last = await client.newWindow({ shell: '/bin/bash' });
+      await client.sendCommand(`kill-window -t ${middle.windowId}`);
+      const appended = await client.newWindow({ shell: '/bin/bash' });
+      assert.equal(appended.windowIndex, last.windowIndex + 1);
+    });
+
+    await t.test('occupied append index recovers after a real tmux error', async () => {
+      const originalSend = client.sendCommand.bind(client);
+      let collided = false;
+      client.sendCommand = async (command, flags) => {
+        const target = /^new-window .* -t (\d+)/.exec(command);
+        if (target && !collided) {
+          collided = true;
+          execFileSync(wrapper, ['new-window', '-d', '-t', `e2e:${target[1]}`, '/bin/bash']);
+        }
+        return originalSend(command, flags);
+      };
+      try {
+        const created = await client.newWindow({ shell: '/bin/bash' });
+        assert.equal(collided, true);
+        assert.ok(created.windowId.startsWith('@'));
+        assert.ok((await client.listWindows()).some((window) => window.id === created.windowId));
+      } finally {
+        client.sendCommand = originalSend;
+      }
+    });
   },
 );

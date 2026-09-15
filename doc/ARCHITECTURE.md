@@ -425,3 +425,27 @@ killed one costs the user their work.
   adoption to populate scrollback.
 * **Pause-mode / extended-output latency tracking.** Listed in
   `doc/plan-alignWithIterm2TmuxIntegration.prompt.md` as future work.
+
+## Fork integration with upstream rename and close handling
+
+The fork retains `TabTitleSync` as the single title classifier, the
+`showAutomaticRename` setting (default false), and the exit-reason based close
+handling. `maybeSyncNameFromVsCode` returns a promise so `deactivate` can finish
+rename writes before disconnecting. The same classifier is invoked on input,
+active-terminal changes, window focus changes, and tab close. No parallel title
+tracker is maintained in `extension.ts`.
+
+Ownership checks for stray-shell cleanup use `creationOptions.pty`, preserving
+other extensions' terminals. Focus and restore-grace handling identify this
+extension's PTYs independently of tab names. The upstream `tmux` creation label
+is retained for its pending-profile fallback.
+
+`adoptionFailed` prevents close handling from killing a pre-existing window if
+snapshot or cursor restoration fails, including an Extension exit reason.
+Upstream shutdown and missing-exit-reason handling remain intact.
+
+`TmuxControlClient.newWindow` reads the highest current window index and tries
+the next index. If the lookup or targeted creation fails, it falls back to
+ordinary tmux allocation. This is best-effort append order, not persistence of
+manually dragged VS Code tabs. The existing timer-based adoption grace can still
+produce duplicate tabs during unusually late workbench restoration.

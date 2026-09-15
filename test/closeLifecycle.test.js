@@ -226,3 +226,16 @@ test('the window is killed at most once', async (t) => {
 
   assert.deepEqual(killedWindows(client), ['kill-window -t @7']);
 });
+
+
+test('failed adoption never kills the existing window, including extension disposal', async () => {
+  const client = new FakeTmuxClient();
+  client.capturePane = async () => { throw new Error('snapshot unavailable'); };
+  const pty = new TmuxTerminal(client, undefined, {}, '/bin/bash', false, {
+    windowId: '@7', paneId: '%9', windowIndex: 5, name: 'existing-work', automaticRename: false,
+  });
+  await pty.open(undefined);
+  pty.close();
+  pty.noteTerminalExitReason(TerminalExitReason.Extension);
+  assert.deepEqual(killedWindows(client), []);
+});

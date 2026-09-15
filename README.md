@@ -239,3 +239,20 @@ Maintainers: see [doc/RELEASE.md](doc/RELEASE.md) for version bumps, changelog g
 
 This project is licensed under the **GNU General Public License v3.0 (GPL-3.0-only)**.
 See [LICENSE](LICENSE) for the full license text.
+
+## Fork changes after rebasing onto upstream
+
+This fork keeps upstream's rename setting and disconnect handling, and adds:
+
+- New windows are created after the highest existing tmux window index, so
+  closing a window and opening another does not normally reorder restored tabs.
+  If another client takes that index first, creation falls back to tmux's normal
+  index selection.
+- Built-in tab renames are also checked when focus changes, a tab closes, or
+  the extension shuts down. Shutdown waits for those name writes to finish.
+- Terminals owned by another extension are preserved during stray-shell cleanup.
+- A failed attachment leaves the existing tmux window running.
+
+Manual dragging of VS Code tabs is not saved. Reconnected tabs follow tmux
+window-index order. Automatic process names remain opt-in through
+`tmux-integrated.showAutomaticRename`.

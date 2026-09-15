@@ -322,3 +322,21 @@ test('default mode: automatic-rename events during open() cannot hijack the titl
 
   assert.deepEqual(titles, ['tmux:5']);
 });
+
+
+test('a shutdown name check waits for a rename already started by input', async () => {
+  const client = new FakeTmuxClient();
+  const { pty } = makeTerminal(client);
+  await pty.open(undefined);
+  let completeRename;
+  client.sendCommandList = () => new Promise((resolve) => { completeRename = resolve; });
+  void pty.maybeSyncNameFromVsCode('pending-user-name');
+  let finished = false;
+  const flush = pty.maybeSyncNameFromVsCode('pending-user-name').then(() => { finished = true; });
+  await tick();
+  assert.equal(finished, false, 'shutdown must wait for the existing command');
+  completeRename([]);
+  await flush;
+  assert.equal(finished, true);
+  pty.close();
+});

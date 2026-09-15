@@ -201,6 +201,8 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
      * lagging behind our own emission. See windowTitle.ts.
      */
     private titleSync = new TabTitleSync();
+    /** Name writes already started by input/focus events must finish on shutdown. */
+    private pendingNameSync: Promise<void> = Promise.resolve();
     private lastCharWasCR = false;
     private resizeTimer: ReturnType<typeof setTimeout> | null = null;
     private readonly log: (message: string) => void;
@@ -226,6 +228,8 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
      * from the moment the listener is registered.
      */
     private initialNameCommitted = false;
+    /** A failed attachment must never destroy a window that already held work. */
+    private adoptionFailed = false;
 
     /** When true (the `showAutomaticRename` setting), the tab tracks tmux's automatic window names. */
     private readonly showAutomaticRename: boolean;
@@ -321,10 +325,14 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
      * they were pushed back to tmux, reverting tmux-side renames whenever
      * the user typed before the new title had round-tripped.
      */
-    maybeSyncNameFromVsCode(terminalName: string): void {
+    maybeSyncNameFromVsCode(terminalName: string): Promise<void> {
         if (this.titleSync.classifyTerminalName(terminalName) === 'user-rename') {
-            void this.syncNameToTmux(terminalName);
+            this.pendingNameSync = Promise.all([
+                this.pendingNameSync,
+                this.syncNameToTmux(terminalName),
+            ]).then(() => undefined);
         }
+        return this.pendingNameSync;
     }
 
     /**
@@ -568,6 +576,7 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
         } catch (err) {
             this.log(`open() ERROR: ${err}`);
             if (this.existingWindow?.windowId) {
+                this.adoptionFailed = true;
                 this.lifecycleHooks.onWindowAttachFailed?.(this.existingWindow.windowId);
             }
             this.writeEmitter.fire(`\r\ntmux-integrated: error creating tmux window: ${err}\r\n`);
@@ -618,7 +627,7 @@ export class TmuxTerminal implements vscode.Pseudoterminal {
         const windowId = this.windowId;
         this.cleanup();
 
-        if (this.windowClosedByTmux || !windowId) {
+        if (this.windowClosedByTmux || this.adoptionFailed || !windowId) {
             // tmux already disposed of the window (shell exit, kill-window
             // from another client): nothing left to decide.
             return;
