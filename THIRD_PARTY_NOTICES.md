@@ -3,7 +3,8 @@
 ## Original extension
 
 This fork is based on [pcassidy75/tmux-integrated](https://github.com/pcassidy75/tmux-integrated),
-licensed under GPL-3.0-only. The complete original license is in `LICENSE`.
+licensed under GPL-3.0-only. The complete original license is in `LICENSE` in the source and `LICENSE.txt`
+in the installer.
 See `FORK_CHANGES.md` for the dated modification notice.
 
 ## node-pty

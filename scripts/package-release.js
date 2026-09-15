@@ -32,7 +32,7 @@ async function main() {
   run(process.execPath, [vsce, 'package', ...flags, '-o', installer], { stdio: 'inherit' });
 
   const entries = output('unzip', ['-Z1', installer]).split('\n');
-  for (const required of ['LICENSE', 'FORK_CHANGES.md', 'THIRD_PARTY_NOTICES.md', 'node_modules/node-pty/LICENSE']) {
+  for (const required of ['LICENSE.txt', 'FORK_CHANGES.md', 'THIRD_PARTY_NOTICES.md', 'node_modules/node-pty/LICENSE']) {
     assert.ok(entries.includes(`extension/${required}`), `Missing package notice: ${required}`);
   }
   assert.ok(!entries.some((name) => /\.(node|dll|exe|pdb|map)$/.test(name)), 'Unexpected native binary or source map');
@@ -42,7 +42,7 @@ async function main() {
   assert.equal(packaged.publisher, 'Roland013');
   assert.equal(packaged.version, manifest.version);
   assert.equal(packaged.license, 'GPL-3.0-only');
-  assert.equal(output('unzip', ['-p', installer, 'extension/LICENSE']), fs.readFileSync('LICENSE', 'utf8').trim());
+  assert.equal(output('unzip', ['-p', installer, 'extension/LICENSE.txt']), fs.readFileSync('LICENSE', 'utf8').trim());
   assert.equal(output('unzip', ['-p', installer, 'extension/node_modules/node-pty/LICENSE']),
     fs.readFileSync('node_modules/node-pty/LICENSE', 'utf8').trim());
 
