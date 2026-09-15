@@ -1,0 +1,8 @@
+{
+  "node-pty": {
+    "version": "1.2.0-beta.13",
+    "commit": "fa83ecfccb901db7c518a5b018d97943506ec94c",
+    "url": "https://codeload.github.com/microsoft/node-pty/tar.gz/fa83ecfccb901db7c518a5b018d97943506ec94c",
+    "sha256": "17e1c02d34277f4f19e499735260cecf09d99a0d338acb1c26f7676ec5eca09d"
+  }
+}

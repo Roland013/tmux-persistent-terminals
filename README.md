@@ -1,258 +1,192 @@
-# tmux-integrated
+# tmux Persistent Terminals for VS Code
 
-Seamless [tmux](https://github.com/tmux/tmux) integration for VS Code terminals.
+Use tmux through familiar VS Code terminal tabs. Keep programs running when you
+disconnect, and return to the same terminals when you reconnect.
 
-## Why?
+This is an independent fork of [tmux-integrated](https://github.com/pcassidy75/tmux-integrated).
+It includes newer upstream fixes plus the additional changes described below.
 
-VS Code terminals are lost the moment you close your laptop or lose a remote
-connection.  tmux solves the persistence problem but using it naively inside a
-VS Code terminal breaks things:
+## Install this fork
 
-| Problem | What breaks |
-|---|---|
-| Run `tmux` directly in the terminal | VS Code shell integration (Copilot) stops working |
-| Run `tmux` directly in the terminal | `code <file>` no longer opens files in VS Code |
-| tmux mouse mode | Interferes with VS Code's own mouse handling |
+**Download:** [Installer for version 0.3.4 (pre-release)](https://github.com/Roland013/tmux-persistent-terminals/releases/download/v0.3.4/tmux-persistent-terminals-0.3.4.vsix)
 
-**tmux-integrated** solves all three.  tmux runs in the background as a session
-manager; VS Code owns the visual layer.  Each VS Code terminal tab corresponds
-to one tmux window.  Closing a tab closes its tmux window, but closing,
-reloading, or switching the workspace of the VS Code window **leaves the
-session running** — when you come back its windows reappear as tabs with your
-processes still alive.
+[Release notes and matching source code](https://github.com/Roland013/tmux-persistent-terminals/releases/tag/v0.3.4)
 
-## Features
+This download installs **this fork**. The original `pcassidy75.tmux-integrated`
+Marketplace listing installs the original project. This fork is distributed
+through GitHub Releases; it does not yet have its own Marketplace listing.
 
-- **Persistent sessions** — one tmux session per workspace, named after the
-  workspace folder.
-- **Smart reconnect** — opening the `tmux-integrated` terminal profile
-  reattaches to an existing window when available; otherwise it creates a new
-  window.
-- **Explicit new window command** — **tmux: New tmux Terminal** always creates
-  a fresh window in the session.
-- **`code <file>` works** — the VS Code CLI socket is forwarded into every
-  tmux window so the `code` command opens files in your running VS Code
-  instance.
-- **Copilot / shell integration compatible** — VS Code's shell integration is
-  passed through transparently so Copilot and other terminal features keep
-  working.
-- **No mouse-mode conflicts** — tmux never draws its own interface inside your
-  VS Code terminal, so there are no mouse or scrolling issues.
-- **Status bar item** — shows the active session name; click to pick an
-  existing window.
+### 1. Install tmux where your terminals run
 
-## Requirements
+For Ubuntu or Debian, open a terminal and run:
 
-- tmux ≥ 2.1 on the machine where your terminal runs (3.x recommended for
-  full feature support including per-window environment variables).
-  tmux is available on Linux, macOS, and Windows via WSL.
-- If you use VS Code on Windows with **Remote - SSH** or **WSL**, tmux only
-  needs to be installed on the remote or WSL side.
+```bash
+sudo apt update
+sudo apt install tmux
+```
 
-## Getting started
+For macOS, if you have [Homebrew](https://brew.sh/) installed:
 
-1. Install the extension.
-2. Open the command palette and run **tmux: New tmux Terminal** (or set
-   `"tmux-integrated"` as your default terminal profile — see below).
-3. That's it. Terminals opened through the profile automatically reattach to
-   existing windows when possible.
+```bash
+brew install tmux
+```
 
-### Set as the default terminal profile
+On Windows, use WSL or connect to a Linux machine through VS Code's Remote SSH
+extension. Run the Linux installation commands inside WSL or on that remote
+machine. Native Windows terminals are not supported.
 
-In your VS Code **settings.json**, set the default profile for the platform
-where your terminal runs:
+Check the installation with `tmux -V`. This extension requires tmux 2.1 or
+newer; tmux 3.x is recommended. See the [tmux installation guide](https://github.com/tmux/tmux/wiki/Installing)
+for other Linux distributions.
 
-```jsonc
-// settings.json — use whichever platform applies to you
+### 2. Install the downloaded extension in VS Code
+
+You need VS Code 1.80 or newer.
+
+1. Download the `.vsix` file using the installer link above. A `.vsix` is a
+   VS Code extension installer. You do not need the source-code ZIP.
+2. Open VS Code. If you use SSH or WSL, connect to that environment first.
+3. Open **View → Command Palette**.
+4. Type **Extensions: Install from VSIX**, select it, and choose the downloaded
+   `tmux-persistent-terminals-0.3.4.vsix` file.
+5. Reload VS Code if prompted.
+6. Open the Extensions view and check that **tmux Persistent Terminals for
+   VS Code** is installed. Its extension ID is
+   `Roland013.tmux-persistent-terminals`. For SSH or WSL, it must be installed in
+   that remote environment, not only on your local computer.
+
+**Already using the original extension?** Disable `pcassidy75.tmux-integrated`
+in the same environment before enabling this fork. Both use the same commands,
+settings, and workspace tmux sessions, so do not run them together. Disabling an
+extension or reloading VS Code is different from deleting its terminal tabs:
+**the terminal trash button ends that terminal's tmux window and programs.**
+
+Existing `tmux-integrated.*` settings and the `tmux-integrated` terminal profile
+name still work. Their old names are kept so your settings do not need changing.
+
+### 3. Open a persistent terminal
+
+1. Open your project folder in VS Code.
+2. Open **View → Command Palette**.
+3. Run **tmux: New tmux Terminal**.
+4. Run your commands as usual.
+
+Each terminal tab belongs to a tmux window. Terminals are grouped into a tmux
+session named after your workspace folder. You can set a different session name
+if you have projects with the same folder name.
+
+### 4. Reconnect to your work
+
+Close the VS Code window or disconnect from the remote machine. When you open
+the same workspace again, the extension reconnects to existing sessions by
+default. You can also run **tmux: Attach to tmux Window** and choose a terminal.
+
+Programs keep running only while their host machine and tmux session remain
+running. A host reboot stops them. Deleting a terminal tab also ends its tmux
+window. This extension does not restore running programs after a reboot.
+
+### Optional: use it for every new terminal
+
+Run **Terminal: Select Default Profile** and select **tmux-integrated**.
+For SSH or WSL, do this in the connected remote window.
+
+Alternatively, add this to your Linux or Linux remote VS Code settings:
+
+```json
 {
-  "terminal.integrated.defaultProfile.linux": "tmux-integrated",
-  "terminal.integrated.defaultProfile.osx": "tmux-integrated",
-  "terminal.integrated.defaultProfile.windows": "tmux-integrated"  // WSL
+  "terminal.integrated.defaultProfile.linux": "tmux-integrated"
 }
 ```
 
-> **Tip:** If you connect to a remote host via **Remote - SSH**, apply this
-> setting in **Remote Settings (JSON)** on the remote side, and make sure the
-> extension is installed in that remote extension host.
+On macOS, use `terminal.integrated.defaultProfile.osx` instead.
 
-### Reconnect after a disconnect
+### Updating this fork
 
-All your processes are still running inside tmux.  Use **tmux: Attach to tmux
-Window** to reopen an existing tmux window in VS Code — the extension restores
-visible output and resumes live updates.  **tmux: New tmux Terminal** creates a
-fresh tmux window in the same session.
+Download the installer from a newer [GitHub release](https://github.com/Roland013/tmux-persistent-terminals/releases)
+and repeat **Extensions: Install from VSIX**. Updates to the original Marketplace
+extension do not update this fork.
 
-### Troubleshooting default profile selection
+## What does this add to plain tmux?
 
-If your default terminal opens plain tmux instead of the extension (often with
-an unexpected session name), VS Code is probably picking a shell profile named
-`tmux` rather than the extension profile.
+Tmux already keeps programs running after you disconnect. This extension brings
+those sessions into VS Code's normal terminal interface:
 
-Make sure the profile name is exactly `"tmux-integrated"` in your settings,
-then reload the VS Code window.
+- **Separate VS Code tabs:** switch between tmux windows through familiar tabs.
+- **Workspace reconnection:** reopen existing terminals for the project you return to.
+- **Open files in VS Code:** use `code <file>` in your tmux terminals.
+- **Editor terminal features:** use VS Code's rendering, mouse handling, scrolling,
+  and supported shell integration instead of drawing tmux's interface inside a tab.
+- **A terminal picker:** choose an existing tmux window from the command palette
+  or status bar.
 
-### Stray default-shell tab on launch
+Tmux remains responsible for keeping programs running. The extension uses its
+control mode to connect those programs to the editor.
 
-VS Code's workbench can spawn an OS-default shell terminal (`/bin/zsh -il`,
-`bash`, `pwsh`, …) on startup *before* any extension has a chance to
-register a terminal-profile provider, even when
-`terminal.integrated.defaultProfile.<os>` resolves to a contributed profile
-like `tmux-integrated`. The race is editor-side — see upstream
-[microsoft/vscode#123188](https://github.com/microsoft/vscode/issues/123188)
-and [#263504](https://github.com/microsoft/vscode/issues/263504). It is
-wider in Cursor than in stock VS Code, but exists on both.
+## What is different in this fork?
 
-There is no activation event that fires before the workbench starts
-populating the terminal panel, so the only remedy from inside an extension
-is to detect the stray and dispose it. The extension does that
-automatically at activation when **both** of the following are true:
+After incorporating upstream changes through `bd7c113`, this fork adds:
 
-- `tmux-integrated.closeStrayShellsOnActivation` is `true` (the default).
-- `terminal.integrated.defaultProfile.<os>` for your platform is exactly
-  `"tmux-integrated"`.
+- **More chances to save a tab rename.** Names are checked when focus changes,
+  a tab closes, or the extension shuts down, even if you never typed after
+  renaming. Shutdown waits for pending name writes.
+- **More predictable restored order.** New tmux windows are created after the
+  highest existing index. Closing an earlier window and opening another normally
+  keeps the new terminal at the end after reconnecting.
+- **Safer failed reconnection.** If restoring an existing window's output fails,
+  that failure does not kill the window and its running programs.
+- **Respect for other extensions' terminals.** Startup cleanup preserves
+  terminals owned by other extensions, whatever their tab name.
 
-When these gates are not satisfied (e.g. you deliberately mix profiles)
-the extension only logs the stray to the `tmux-integrated` Output channel
-and leaves it untouched.
+Upstream's newer rename tracking, disconnect protection, and terminal color
+response fix are retained. Automatic process names remain optional. These are
+shared upstream features, not new inventions of this fork.
 
-If you ever want to keep the stray (for example because your workflow
-relies on having a non-tmux fallback terminal handy on launch), disable
-the auto-close:
+## Settings
 
-```jsonc
-{
-  "tmux-integrated.closeStrayShellsOnActivation": false
-}
-```
-
-Belt-and-braces option for users who don't need the workbench's own
-terminal session restoration on top of tmux's persistence:
-
-```jsonc
-{
-  "terminal.integrated.enablePersistentSessions": false
-}
-```
-
-tmux already preserves your work across reloads, so VS Code's session
-restore is largely redundant when this extension is your default profile.
-
-The extension's Output channel ("tmux-integrated") logs which terminals
-were disposed (or skipped, and why) at each activation.
-
-## Release channels
-
-tmux-integrated ships on two channels:
-
-- **Stable** — the default. Tested, recommended for everyday use.
-- **Beta (pre-release)** — early access to upcoming changes. Newer, less
-  battle-tested.
-
-Both are published to the VS Code Marketplace and to
-[Open VSX](https://open-vsx.org/) (used by Cursor, VSCodium, and others).
-
-### Switching channels in VS Code or Cursor
-
-The editor has this built in — no special download required:
-
-1. Open the **Extensions** view and select **tmux-integrated**.
-2. On the extension page, click **Switch to Pre-Release Version** to opt into
-   the beta channel (the button reads **Switch to Release Version** to go back).
-3. The editor installs the newest build for the channel you chose and keeps it
-   updated automatically.
-
-Following the
-[VS Code convention](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#prerelease-extensions),
-stable releases use **even** minor versions (`0.2.x`, `0.4.x`, …) and beta
-releases use **odd** minor versions (`0.3.x`, `0.5.x`, …).
-
-### Manual install
-
-Every release also attaches a `.vsix` to its
-[GitHub release](https://github.com/pcassidy75/tmux-integrated/releases)
-(beta builds are marked as pre-releases). Download it and run
-**Extensions: Install from VSIX…** from the command palette.
-
-## Extension settings
-
-| Setting | Default | Description |
+| Setting | Default | What it does |
 |---|---|---|
-| `tmux-integrated.sessionName` | *(workspace folder name)* | Override the tmux session name |
-| `tmux-integrated.shell` | `$SHELL` or `/bin/bash` | Shell to run inside each tmux pane |
-| `tmux-integrated.cwd` | *(workspace folder)* | Starting directory for new tmux terminals. Supports `${workspaceFolder}`. If unset, falls back to `terminal.integrated.cwd`, then the workspace folder. |
-| `tmux-integrated.autoConnect` | `true` | Automatically connect to existing tmux sessions associated with the workspace when VS Code opens. |
-| `tmux-integrated.showAutomaticRename` | `false` | Show tmux's automatic window name in the tab so the title tracks the foreground process (see *Terminal tab names* below). |
-| `tmux-integrated.closeStrayShellsOnActivation` | `true` | Dispose stray default-shell terminals spawned before activation (see *Stray default-shell tab on launch* above). |
+| `tmux-integrated.sessionName` | Workspace folder name | Choose a different tmux session name. |
+| `tmux-integrated.shell` | Your default shell | Choose the shell for new terminals. |
+| `tmux-integrated.cwd` | Workspace folder | Set the starting directory; supports `${workspaceFolder}` and falls back to `terminal.integrated.cwd`. |
+| `tmux-integrated.autoConnect` | `true` | Reopen existing workspace terminals when VS Code opens. |
+| `tmux-integrated.showAutomaticRename` | `false` | Show the running program's name instead of a stable `tmux:<index>` label. Takes effect when terminals are created or reattached. |
+| `tmux-integrated.closeStrayShellsOnActivation` | `true` | Close ordinary shell tabs opened before the extension starts, only when `tmux-integrated` is the default profile. Set to `false` if you want to keep those tabs. |
 
-## Commands
+Use **tmux: Rename tmux Terminal** to give a terminal a fixed name. When automatic
+names are enabled, submitting an empty name with this command returns it to
+automatic naming. The explicit command also lets you reuse an earlier name that
+the built-in Rename action may treat as a delayed title update.
 
-| Command | Description |
-|---|---|
-| `tmux: New tmux Terminal` | Open a new terminal backed by a new tmux window |
-| `tmux: Attach to tmux Window` | Pick an existing tmux window from the session |
-| `tmux: Rename tmux Terminal` | Rename the active terminal's tab and its tmux window together |
+## Limits and troubleshooting
 
-## Terminal tab names
+- **Dragged tab order is not saved.** Reconnected tabs follow tmux window-index
+  order. If another client takes a new window's intended index first, creation
+  falls back to tmux's normal choice of index.
+- **Slow restoration can still produce duplicate tabs.** The existing timed
+  reconnection grace does not cover every editor restoration delay.
+- **Nothing appears after installing?** Check that tmux is installed on the
+  terminal host and that the extension is installed and enabled there. Open
+  **View → Output → tmux-integrated** for diagnostic messages.
+- **An ordinary shell tab appears at startup?** Check your default profile.
+  VS Code may create that tab before extensions have activated. The cleanup
+  setting above controls whether it is closed.
+- **Your sessions vanished after a reboot?** tmux keeps live processes running;
+  it is not a backup or a reboot recovery system.
 
-Each tab shows the name of its tmux window, and renames stay in sync in both
-directions:
+The first fork release is a pre-release. Automated checks include a real tmux
+server on Linux. Interactive VS Code, macOS, and Windows-to-WSL/SSH testing are
+not claimed by this release. See [release validation](doc/VALIDATION.md).
 
-- Rename the tab in VS Code (the built-in **Rename…** action or **tmux:
-  Rename tmux Terminal**) and the tmux window is renamed to match.
-- Rename the window from inside tmux (`tmux rename-window …`) and the tab
-  follows.
+## License and source
 
-By default, windows managed by the extension are pinned to stable
-`tmux:<index>` labels: tmux's *automatic-rename* feature (which retitles the
-window after the foreground process) is turned off so titles don't churn.
+This modified fork is distributed under **GPL-3.0-only**, the same license as
+[the original project](https://github.com/pcassidy75/tmux-integrated).
+See [LICENSE](LICENSE), [FORK_CHANGES.md](FORK_CHANGES.md), and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-If you prefer tabs that track the running program — `vim`, `htop`, `npm`, … —
-like a regular VS Code terminal, enable:
+Each release provides the installer and a matching source archive, including
+the original source for the bundled node-pty JavaScript. Source downloads and
+build instructions are available alongside the installer. No Marketplace
+account is required to install it or to build a modified version.
 
-```jsonc
-{
-  "tmux-integrated.showAutomaticRename": true
-}
-```
-
-With this enabled, tmux keeps ownership of the window name and the tab
-follows it. An explicit rename still pins that window's name; run **tmux:
-Rename tmux Terminal** and submit an empty name to hand the title back to
-tmux's automatic naming. The setting applies to terminals created or adopted
-after it is changed (existing tabs pick it up on the next window reload).
-
-## How it works
-
-The extension uses tmux's **control mode** (`-CC`) — the same approach used by
-[iTerm2](https://iterm2.com/).  In control mode tmux manages sessions and
-windows in the background while VS Code handles all rendering.  This means
-shell integration, Copilot, mouse support, and the `code` CLI all continue to
-work exactly as they do in a normal VS Code terminal.
-
-## Contributing
-
-Contributions are welcome — open an issue or submit a pull request.
-
-Maintainers: see [doc/RELEASE.md](doc/RELEASE.md) for version bumps, changelog generation, and marketplace publish.
-
-## License
-
-This project is licensed under the **GNU General Public License v3.0 (GPL-3.0-only)**.
-See [LICENSE](LICENSE) for the full license text.
-
-## Fork changes after rebasing onto upstream
-
-This fork keeps upstream's rename setting and disconnect handling, and adds:
-
-- New windows are created after the highest existing tmux window index, so
-  closing a window and opening another does not normally reorder restored tabs.
-  If another client takes that index first, creation falls back to tmux's normal
-  index selection.
-- Built-in tab renames are also checked when focus changes, a tab closes, or
-  the extension shuts down. Shutdown waits for those name writes to finish.
-- Terminals owned by another extension are preserved during stray-shell cleanup.
-- A failed attachment leaves the existing tmux window running.
-
-Manual dragging of VS Code tabs is not saved. Reconnected tabs follow tmux
-window-index order. Automatic process names remain opt-in through
-`tmux-integrated.showAutomaticRename`.
+For development and release instructions, see [doc/RELEASE.md](doc/RELEASE.md).

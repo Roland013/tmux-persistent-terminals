@@ -1,14 +1,14 @@
 {
-  "name": "tmux-integrated",
-  "displayName": "tmux-integrated",
-  "description": "Seamless tmux integration for VS Code terminals — persistent sessions, code-command support, and Copilot compatibility",
+  "name": "tmux-persistent-terminals",
+  "displayName": "tmux Persistent Terminals for VS Code",
+  "description": "Use tmux through familiar VS Code terminal tabs. Keep programs running when you disconnect, and return to the same terminals when you reconnect.",
   "version": "0.3.3",
-  "publisher": "pcassidy75",
+  "publisher": "Roland013",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pcassidy75/tmux-integrated"
+    "url": "https://github.com/Roland013/tmux-persistent-terminals"
   },
   "engines": {
     "vscode": "^1.80.0"
@@ -65,7 +65,7 @@
       ]
     },
     "configuration": {
-      "title": "tmux-integrated",
+      "title": "tmux Persistent Terminals",
       "properties": {
         "tmux-integrated.sessionName": {
           "type": "string",
@@ -110,7 +110,8 @@
     "version": "npm run changelog && git add CHANGELOG.md",
     "release:beta": "node scripts/release.js beta",
     "release:stable": "node scripts/release.js stable",
-    "release": "node scripts/release.js stable"
+    "release": "node scripts/release.js stable",
+    "package:release": "node scripts/package-release.js"
   },
   "devDependencies": {
     "@types/node": "^20.19.41",
@@ -123,5 +124,9 @@
   },
   "dependencies": {
     "node-pty": "1.2.0-beta.13"
+  },
+  "homepage": "https://github.com/Roland013/tmux-persistent-terminals#readme",
+  "bugs": {
+    "url": "https://github.com/Roland013/tmux-persistent-terminals/issues"
   }
 }
