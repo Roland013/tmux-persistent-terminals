@@ -14,10 +14,6 @@ It includes newer upstream fixes plus the additional changes described below.
 
 You can also [build an installer from source](doc/RELEASE.md#build-an-installer-yourself).
 
-This download installs **this fork**. The original `pcassidy75.tmux-integrated`
-Marketplace listing installs the original project. This fork is distributed
-through GitHub Releases; it does not have its own VS Code marketplace listing.
-
 ### 1. Install tmux where your terminals run
 
 For Ubuntu or Debian, open a terminal and run:
