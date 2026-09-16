@@ -1,10 +1,23 @@
 # tmux Persistent Terminals for VS Code
 
-Use tmux in VS Code terminal tabs and keep them running when you
-disconnect and return to the same terminals when you reconnect.
-
 This is an independent fork of [tmux-integrated](https://github.com/pcassidy75/tmux-integrated).
-It includes newer upstream fixes plus the additional changes described below.
+
+## What does this add to plain tmux?
+
+This fork of tmux keeps terminal tabs and sequence persistent and keep them running when youdisconnect and return to the same terminals when you reconnect.
+
+Tmux already keeps programs running after you disconnect. This extension brings those sessions into VS Code's normal terminal interface:
+
+- **Separate VS Code tabs:** switch between tmux windows through familiar tabs.
+- **Workspace reconnection:** reopen existing terminals for the project you return to.
+- **Open files in VS Code:** use `code <file>` in your tmux terminals.
+- **Editor terminal features:** use VS Code's rendering, mouse handling, scrolling,
+  and supported shell integration instead of drawing tmux's interface inside a tab.
+- **A terminal picker:** choose an existing tmux window from the command palette
+  or status bar.
+
+Tmux remains responsible for keeping programs running. The extension uses its
+control mode to connect those programs to the editor.
 
 ## Install this fork
 
@@ -133,21 +146,7 @@ Download the installer from a newer [GitHub release](https://github.com/Roland01
 and repeat **Extensions: Install from VSIX**. Updates to the original Marketplace
 extension do not update this fork.
 
-## What does this add to plain tmux?
 
-Tmux already keeps programs running after you disconnect. This extension brings
-those sessions into VS Code's normal terminal interface:
-
-- **Separate VS Code tabs:** switch between tmux windows through familiar tabs.
-- **Workspace reconnection:** reopen existing terminals for the project you return to.
-- **Open files in VS Code:** use `code <file>` in your tmux terminals.
-- **Editor terminal features:** use VS Code's rendering, mouse handling, scrolling,
-  and supported shell integration instead of drawing tmux's interface inside a tab.
-- **A terminal picker:** choose an existing tmux window from the command palette
-  or status bar.
-
-Tmux remains responsible for keeping programs running. The extension uses its
-control mode to connect those programs to the editor.
 
 ## What is different in this fork?
 
