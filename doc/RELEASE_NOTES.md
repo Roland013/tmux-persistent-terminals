@@ -18,6 +18,10 @@ supported. This installer is for the fork, not the original Marketplace listing.
 
 ## Changes
 
+- Include **tmux: Save terminal order**: arrange panel tabs, run the command,
+  and wait for confirmation. It preserves the programs while saving their order
+  for reconnects. Run it again after dragging; split/editor terminals are unsupported.
+
 - Check and save tab renames on focus changes and shutdown, including pending writes.
 - Create new windows after the highest tmux index, with fallback after index conflicts.
 - Preserve running windows when attachment fails and preserve other extensions' terminals.
@@ -26,10 +30,10 @@ supported. This installer is for the fork, not the original Marketplace listing.
 
 ## Verification and limits
 
-39 tests passed with no skips, including a private real-tmux server on Linux;
+48 tests passed with no skips, including a private real-tmux server on Linux;
 lint passed. Interactive VS Code, macOS and SSH/WSL client behavior were not
-manually tested. Manual dragged tab order is not restored and very late editor
-restoration can still duplicate tabs. The inherited build tools have nine npm
+manually tested. Dragged tab order must be saved explicitly with the new command; very late
+editor restoration can still duplicate tabs. The inherited build tools have nine npm
 audit advisories; the production dependency audit reports none.
 
 Closing a terminal with the trash button ends its programs. Closing VS Code or

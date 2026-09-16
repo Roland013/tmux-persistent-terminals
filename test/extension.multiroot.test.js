@@ -27,6 +27,9 @@ class EventEmitter {
 }
 
 class FakeTmuxControlClient extends events.EventEmitter {
+  constructor() { super(); FakeTmuxControlClient.latest = this; this.savedOrders = []; this.commands = []; }
+  async saveWindowOrder(ids) { this.savedOrders.push(ids); }
+
   setVersion() {}
 
   versionAtLeast() {
@@ -44,6 +47,7 @@ class FakeTmuxControlClient extends events.EventEmitter {
   }
 
   async sendCommand(command) {
+    this.commands.push(command);
     return command.includes('__ping__') ? ['__ping__'] : [];
   }
 
@@ -54,6 +58,9 @@ class FakeTmuxControlClient extends events.EventEmitter {
 
 test('workspace selection, terminal ownership, and rename lifecycle wiring', async () => {
   let profileProvider;
+  const commands = {};
+  const messages = [];
+  let capture = async () => [];
   const handlers = {};
   let foreignDisposed = false;
   const foreignTerminal = { name: 'other-extension', creationOptions: { pty: {} },
@@ -92,7 +99,8 @@ test('workspace selection, terminal ownership, and rename lifecycle wiring', asy
         return new Disposable();
       },
       showQuickPick: async (items) => items.find((item) => item.workspaceFolder?.index === 1),
-      showErrorMessage: async () => undefined,
+      showErrorMessage: async (message) => { messages.push(message); },
+      showInformationMessage: async (message) => { messages.push(message); },
       showWarningMessage() {},
       onDidOpenTerminal: (handler) => { handlers.onDidOpenTerminal = handler; return new Disposable(); },
       onDidCloseTerminal: (handler) => { handlers.onDidCloseTerminal = handler; return new Disposable(); },
@@ -100,7 +108,7 @@ test('workspace selection, terminal ownership, and rename lifecycle wiring', asy
       onDidChangeWindowState: (handler) => { handlers.onDidChangeWindowState = handler; return new Disposable(); },
       state: { focused: false },
     },
-    commands: { registerCommand: () => new Disposable() },
+    commands: { registerCommand: (name, handler) => { commands[name] = handler; return new Disposable(); } },
   };
 
   const originalLoad = Module._load;
@@ -108,6 +116,7 @@ test('workspace selection, terminal ownership, and rename lifecycle wiring', asy
     if (request === 'vscode') {
       return vscode;
     }
+    if (request === './terminalOrder') { return { capturePanelTerminalOrder: () => capture() }; }
     if (request === 'child_process') {
       return {
         execFileSync(_file, args) {
@@ -155,6 +164,35 @@ test('workspace selection, terminal ownership, and rename lifecycle wiring', asy
     handlers.onDidChangeWindowState({ focused: false });
     await new Promise((resolve) => setImmediate(resolve));
     assert.ok(observed.includes('custom-name'), 'focus loss catches a rename without input');
+
+    vscode.window.terminals.push(terminal);
+    vscode.window.activeTerminal = terminal;
+    pty.getAttachedTmuxWindowId = () => '@1';
+    const saveOrder = commands['tmux-integrated.saveTerminalOrder'];
+    assert.equal(typeof saveOrder, 'function', 'Save terminal order is registered');
+    let completeScan;
+    capture = () => new Promise(resolve => { completeScan = resolve; });
+    const saving = saveOrder();
+    await new Promise(resolve => setImmediate(resolve));
+    const checksBeforeNavigation = observed.length;
+    handlers.onDidChangeActiveTerminal(terminal);
+    assert.equal(observed.length, checksBeforeNavigation, 'navigation must not run normal focus/name sync');
+    await saveOrder(); // A second invocation while scanning is ignored.
+    completeScan([foreignTerminal, terminal]);
+    await saving;
+    assert.deepEqual(FakeTmuxControlClient.latest.savedOrders, [['@1']]);
+    assert.equal(messages.at(-1), 'Saved order of 1 tmux terminals.');
+    assert.equal(FakeTmuxControlClient.latest.commands.at(-1), 'select-window -t @1');
+
+    capture = async () => [];
+    await saveOrder();
+    assert.match(messages.at(-1), /own terminal-panel tab/);
+    assert.equal(FakeTmuxControlClient.latest.savedOrders.length, 1);
+    capture = async () => [terminal];
+    pty.getAttachedTmuxWindowId = () => null;
+    await saveOrder();
+    assert.match(messages.at(-1), /still connecting/);
+    assert.equal(FakeTmuxControlClient.latest.savedOrders.length, 1);
 
     let finish;
     pty.maybeSyncNameFromVsCode = () => new Promise((resolve) => { finish = resolve; });

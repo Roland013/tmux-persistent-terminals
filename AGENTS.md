@@ -16,6 +16,7 @@ for user-facing docs and [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for design
 | `src/tmuxGateway.ts` | High-level session/window orchestration |
 | `src/tmuxControlClient.ts` | tmux `-CC` control-mode protocol client |
 | `src/tmuxTerminalProvider.ts` | VS Code `Pseudoterminal` implementation |
+| `src/terminalOrder.ts` | Explicit visual panel-order scan for Save terminal order |
 | `src/windowTitle.ts` | Window/title helpers |
 | `out/` | Compiled JS output (do not edit, gitignored) |
 | `scripts/release.js` | Computes the next version per channel and cuts the release |

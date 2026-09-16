@@ -272,5 +272,28 @@ test(
         client.sendCommand = originalSend;
       }
     });
+
+    await t.test('saved panel order survives reattachment without replacing panes or processes', async () => {
+      const before = await client.listWindows();
+      const originalActive = before.find(w => w.active)?.id;
+      const desired = before.map(w => w.id).reverse();
+      const processes = await client.sendCommand('list-panes -s -F "#{pane_id}|#{pane_pid}"');
+      await client.saveWindowOrder(desired);
+      const after = await client.listWindows();
+      assert.deepEqual(after.map(w => w.id), desired);
+      assert.deepEqual(after.map(w => [w.id, w.paneId, w.name]).sort(),
+        before.map(w => [w.id, w.paneId, w.name]).sort());
+      assert.deepEqual((await client.sendCommand('list-panes -s -F "#{pane_id}|#{pane_pid}"')).sort(), processes.sort());
+      if (originalActive) { await client.sendCommand(`select-window -t ${originalActive}`); }
+      client.disconnect();
+      const reconnected = new TmuxControlClient('e2e', wrapper, repoRoot);
+      reconnected.setVersion(execFileSync('tmux', ['-V'], { encoding: 'utf8' }));
+      try {
+        await reconnected.connect({ startDirectory: tmpDir });
+        assert.deepEqual((await reconnected.listWindows()).map(w => w.id), desired);
+      } finally {
+        reconnected.disconnect();
+      }
+    });
   },
 );

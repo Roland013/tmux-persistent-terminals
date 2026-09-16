@@ -69,7 +69,7 @@ activate()
   |-- create OutputChannel + StatusBar
   |-- registerTerminalRenameSync()    // wire onDidOpen/Close/ChangeActive
   |-- registerTerminalProfile()       // contributes "tmux-integrated" profile
-  |-- registerCommands()              // newTerminal / attachWindow / renameTerminal
+  |-- registerCommands()              // newTerminal / attachWindow / renameTerminal / saveTerminalOrder
   |-- if autoConnect && session exists:
         autoConnectExistingSession()  // fire-and-forget
 ```
@@ -446,6 +446,31 @@ Upstream shutdown and missing-exit-reason handling remain intact.
 
 `TmuxControlClient.newWindow` reads the highest current window index and tries
 the next index. If the lookup or targeted creation fails, it falls back to
-ordinary tmux allocation. This is best-effort append order, not persistence of
-manually dragged VS Code tabs. The existing timer-based adoption grace can still
+ordinary tmux allocation. This provides best-effort append order; manually
+arranged tabs are saved separately by the explicit command below. The existing timer-based adoption grace can still
 produce duplicate tabs during unusually late workbench restoration.
+
+
+## Explicit terminal order saving
+
+`tmux-integrated.saveTerminalOrder` incorporates the locally used order-saving
+feature. `capturePanelTerminalOrder` uses editor navigation commands to visit
+panel tabs in visual order, because `vscode.window.terminals` is creation order.
+It supports more than nine tabs by focusing the first and cycling to the next
+until the first is reached again. It detects terminals opening or closing during
+the scan and restores the original terminal even on failure.
+
+The command serializes its own invocations, flushes pending renames through the
+upstream title classifier, and suppresses ordinary active-terminal synchronization
+while it visits tabs. It accepts only this extension's connected window IDs;
+incomplete traversal (including unsupported split/editor layouts) is rejected.
+The original tmux active window is selected again after scanning/saving.
+
+`saveWindowOrder` validates unique existing window IDs, then uses `swap-window -d`
+to permute existing indices. No panes or processes are recreated and no shell
+input is sent. Unopened session windows keep their relative order after the saved
+panel windows. The final `list-windows` order must match before success is shown.
+A failed connection or concurrent client can leave a partial permutation; the
+operation reports failure and may be retried. This updates the shared tmux
+session, not a private VS Code layout. It neither saves split layouts nor survives
+a host reboot. No external recovery service is assumed by the public fork.

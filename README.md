@@ -8,6 +8,10 @@ It includes newer upstream fixes plus the additional changes described below.
 
 ## Install this fork
 
+**Release status:** version 0.3.4 is being prepared in [draft PR #1](https://github.com/Roland013/tmux-persistent-terminals/pull/1).
+It has not been published. The download links below become available after
+release; for now, use the [build instructions](doc/RELEASE.md#build-an-installer-yourself).
+
 **Download:** [Installer for version 0.3.4 (pre-release)](https://github.com/Roland013/tmux-persistent-terminals/releases/download/v0.3.4/tmux-persistent-terminals-0.3.4.vsix)
 
 [Release notes and matching source code](https://github.com/Roland013/tmux-persistent-terminals/releases/tag/v0.3.4)
@@ -85,6 +89,35 @@ Programs keep running only while their host machine and tmux session remain
 running. A host reboot stops them. Deleting a terminal tab also ends its tmux
 window. This extension does not restore running programs after a reboot.
 
+### Save the order of your terminal tabs
+
+1. Drag your terminal tabs into the order you want.
+2. Open **View → Command Palette** (or press **F1**).
+3. Run **tmux: Save terminal order**.
+4. Wait for **Saved order of N tmux terminals**.
+
+The command briefly switches through the terminal tabs, then returns to your
+original terminal. It changes the positions of the existing tmux windows without
+restarting their programs or typing anything into them. The saved order is used
+when those windows are reopened after a reload or reconnect.
+
+**Save again after rearranging your tabs.** Dragging alone does not save the order.
+Keep each tmux terminal in its own tab in the terminal panel: split terminal groups
+and terminals moved into the editor area are not supported. Other extensions'
+terminals are not saved. Existing tmux windows that are not open in the panel
+follow your saved tabs in their previous relative order.
+
+If a terminal opens or closes during the scan, wait until the tabs settle and run
+the command again. If the connection fails while saving, some window positions
+may already have changed; reconnect, arrange the tabs, and save again. The command
+checks the final tmux order before reporting success. Other clients attached to
+the same tmux session will also see its new window order. This does not provide
+recovery after a host reboot.
+
+For a keyboard shortcut, open **File → Preferences → Keyboard Shortcuts** (on
+macOS, **Code → Settings → Keyboard Shortcuts**), search for **Save terminal order**,
+and assign your preferred keys. The command ID is `tmux-integrated.saveTerminalOrder`.
+
 ### Optional: use it for every new terminal
 
 Run **Terminal: Select Default Profile** and select **tmux-integrated**.
@@ -126,6 +159,9 @@ control mode to connect those programs to the editor.
 
 After incorporating upstream changes through `bd7c113`, this fork adds:
 
+- **Save your arranged tab order.** Run **tmux: Save terminal order** after
+  dragging tabs so reconnecting follows the saved order.
+
 - **More chances to save a tab rename.** Names are checked when focus changes,
   a tab closes, or the extension shuts down, even if you never typed after
   renaming. Shutdown waits for pending name writes.
@@ -159,9 +195,10 @@ the built-in Rename action may treat as a delayed title update.
 
 ## Limits and troubleshooting
 
-- **Dragged tab order is not saved.** Reconnected tabs follow tmux window-index
-  order. If another client takes a new window's intended index first, creation
-  falls back to tmux's normal choice of index.
+- **Saving tab order is manual.** Run **tmux: Save terminal order** after
+  dragging tabs. Reconnected tabs follow the resulting tmux window-index order.
+  If another client takes a new window's intended index first, creation falls
+  back to tmux's normal choice of index.
 - **Slow restoration can still produce duplicate tabs.** The existing timed
   reconnection grace does not cover every editor restoration delay.
 - **Nothing appears after installing?** Check that tmux is installed on the

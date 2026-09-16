@@ -34,7 +34,25 @@ and older tmux versions were not manually exercised for this release. A passing
 Linux test suite is not a claim that those environments were tested. This first
 fork release is marked pre-release.
 
-Manual VS Code tab dragging is not persisted. Very late editor restoration can
+Manual VS Code tab dragging alone is not persisted; use the explicit save command. Very late editor restoration can
 still create duplicate tabs. Upstream's remembered-title classifier can ignore
 a built-in rename back to an earlier title; use the explicit tmux rename command
 for that case. These existing limits are documented rather than silently changed.
+
+
+## Save terminal order integration — 16 September 2026
+
+`npm test` passed 48 tests with zero skips after porting the installed local
+command into TypeScript source. Tests cover visual order different from creation
+order, more than nine tabs, focus restoration, concurrent tab changes, command
+registration and re-entry, unsupported/incomplete panel scans, disconnected
+windows, ID validation, index gaps, partial-save retry, and final-order checking.
+The private real-tmux test saves order, verifies unchanged pane IDs and process
+IDs, reconnects a new control client, and verifies the saved order again.
+
+`npm run lint` and `git diff --check` passed. The command's navigation has not been
+visually tested in the Windows VS Code client. The public success message has no
+dependency on the private recovery helper used by the original local build.
+
+The changes remain in draft PR #1. No update to the remote main branch or release
+publication is authorized. Version 0.3.4 remains an unpublished release candidate.

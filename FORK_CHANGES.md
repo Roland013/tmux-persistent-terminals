@@ -16,3 +16,10 @@ with matching source downloads and retained dependency notices.
 The project remains GPL-3.0-only. The original license and inherited notices
 are retained. This fork is independently maintained and is not presented as
 an official release by the original maintainer, Microsoft, or the tmux project.
+
+
+Modified on 16 September 2026 to incorporate the local **Save terminal order**
+command. It saves manually arranged panel tabs by swapping existing tmux window
+indices and verifies the result. It preserves window/pane identity and running
+processes, restores focus, and reports interrupted saves. User instructions and
+mocked-editor/real-tmux compatibility tests accompany the change.

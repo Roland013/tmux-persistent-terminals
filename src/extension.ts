@@ -19,6 +19,7 @@ import { execFileSync } from 'child_process';
 
 import { TmuxControlClient, CommandFlags } from './tmuxControlClient';
 import { TmuxTerminal } from './tmuxTerminalProvider';
+import { capturePanelTerminalOrder } from './terminalOrder';
 
 interface AttachWindowItem extends vscode.QuickPickItem {
     windowId: string;
@@ -64,6 +65,8 @@ const terminalPtyByTerminal = new Map<vscode.Terminal, TmuxTerminal>();
 const pendingTerminalPtys: TmuxTerminal[] = [];
 let activeTmuxWindowId: string | null = null;
 let pendingUserTerminalFocus: boolean = false;
+/** Suppress ordinary focus synchronization while the explicit order scan navigates tabs. */
+let savingTerminalOrder = false;
 
 // ---------------------------------------------------------------------------
 // Activation / deactivation
@@ -250,6 +253,9 @@ function registerTerminalRenameSync(context: vscode.ExtensionContext): void {
             untrackTerminal(terminal);
         }),
         vscode.window.onDidChangeActiveTerminal((terminal) => {
+            if (savingTerminalOrder) {
+                return;
+            }
             void flushRenames();
             void syncActiveTerminalToTmuxWindow(terminal);
         }),
@@ -367,6 +373,43 @@ function registerTerminalProfile(context: vscode.ExtensionContext): void {
 
 function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
+        vscode.commands.registerCommand('tmux-integrated.saveTerminalOrder', async () => {
+            if (savingTerminalOrder) {
+                return;
+            }
+            const owned = vscode.window.terminals.filter(t => getTmuxPtyFromTerminal(t));
+            const connectedClient = client;
+            if (!connectedClient?.isConnected() || owned.length === 0) {
+                vscode.window.showWarningMessage('Open your tmux terminals before saving their order.');
+                return;
+            }
+            const original = vscode.window.activeTerminal;
+            savingTerminalOrder = true;
+            try {
+                await flushRenames();
+                const ordered = (await capturePanelTerminalOrder()).filter(t => owned.includes(t));
+                if (ordered.length !== owned.length) {
+                    throw new Error('Keep each tmux terminal in its own terminal-panel tab before saving the order.');
+                }
+                const ids = ordered.map(t => getTmuxPtyFromTerminal(t)?.getAttachedTmuxWindowId())
+                    .filter((id): id is string => !!id);
+                if (ids.length !== ordered.length) {
+                    throw new Error('Some terminals are still connecting. Please save again after they open.');
+                }
+                await connectedClient.saveWindowOrder(ids);
+                vscode.window.showInformationMessage(`Saved order of ${ids.length} tmux terminals.`);
+            } catch (err) {
+                log(`Save terminal order failed: ${err}`);
+                vscode.window.showErrorMessage(`Could not save terminal order: ${err instanceof Error ? err.message : String(err)}`);
+            } finally {
+                // The scan's focus changes are excluded from normal tmux focus sync.
+                const id = original && getTmuxPtyFromTerminal(original)?.getAttachedTmuxWindowId();
+                if (id && connectedClient.isConnected()) {
+                    await connectedClient.sendCommand(`select-window -t ${id}`, CommandFlags.TolerateErrors).catch(() => {});
+                }
+                savingTerminalOrder = false;
+            }
+        }),
         vscode.commands.registerCommand('tmux-integrated.newTerminal', async () => {
             const startDirectory = await pickStartDirectory(extensionRootPath);
             if (!startDirectory) { return; }

@@ -40,6 +40,11 @@
     },
     "commands": [
       {
+        "command": "tmux-integrated.saveTerminalOrder",
+        "title": "Save terminal order",
+        "category": "tmux"
+      },
+      {
         "command": "tmux-integrated.newTerminal",
         "title": "New tmux Terminal",
         "category": "tmux"

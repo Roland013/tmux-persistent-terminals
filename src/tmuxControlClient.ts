@@ -533,6 +533,30 @@ export class TmuxControlClient extends EventEmitter {
         await this.sendCommand(`kill-window -t ${windowId}`);
     }
 
+    /** Save visual order in existing tmux indices without replacing windows or panes. */
+    async saveWindowOrder(orderedIds: readonly string[]): Promise<void> {
+        const windows = (await this.listWindows()).sort((a, b) => a.index - b.index);
+        const positions = windows.map(w => w.id);
+        if (new Set(orderedIds).size !== orderedIds.length
+            || orderedIds.some(id => !/^@\d+$/.test(id) || !positions.includes(id))) {
+            throw new Error('A terminal window changed before its order could be saved. Please save again.');
+        }
+        // Unopened windows retain their relative order after the saved panel tabs.
+        const desired = [...orderedIds, ...positions.filter(id => !orderedIds.includes(id))];
+        for (let index = 0; index < desired.length; index++) {
+            if (positions[index] === desired[index]) {
+                continue;
+            }
+            const other = positions.indexOf(desired[index]);
+            await this.sendCommand(`swap-window -d -s ${desired[index]} -t ${positions[index]}`);
+            [positions[index], positions[other]] = [positions[other], positions[index]];
+        }
+        const actual = (await this.listWindows()).sort((a, b) => a.index - b.index).map(w => w.id);
+        if (actual.length !== desired.length || actual.some((id, index) => id !== desired[index])) {
+            throw new Error('Tmux order changed while saving. Please save again.');
+        }
+    }
+
     /** Highest `#{window_index}` in the session, or undefined if none is known. */
     private async trailingWindowIndex(): Promise<number | undefined> {
         const windows = await this.listWindows();
