@@ -4,7 +4,7 @@ This is an independent fork of [tmux-integrated](https://github.com/pcassidy75/t
 
 ## What does this add to plain tmux?
 
-This fork of tmux keeps terminal tabs and sequence persistent and keep them running when youdisconnect and return to the same terminals when you reconnect.
+This fork of tmux keeps terminal tabs and sequence persistent and keep them running when you disconnect and return to the same terminals when you reconnect.
 
 Tmux already keeps programs running after you disconnect. This extension brings those sessions into VS Code's normal terminal interface:
 
