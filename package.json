@@ -1,14 +1,14 @@
 {
-  "name": "tmux-integrated",
-  "displayName": "tmux-integrated",
-  "description": "Seamless tmux integration for VS Code terminals — persistent sessions, code-command support, and Copilot compatibility",
-  "version": "0.3.1",
-  "publisher": "pcassidy75",
+  "name": "tmux-persistent-terminals",
+  "displayName": "tmux Persistent Terminals for VS Code",
+  "description": "Use tmux through familiar VS Code terminal tabs. Keep programs running when you disconnect, and return to the same terminals when you reconnect.",
+  "version": "0.3.4",
+  "publisher": "Roland013",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
-    "url": "https://github.com/pcassidy75/tmux-integrated"
+    "url": "https://github.com/Roland013/tmux-persistent-terminals"
   },
   "engines": {
     "vscode": "^1.80.0"
@@ -40,6 +40,11 @@
     },
     "commands": [
       {
+        "command": "tmux-integrated.saveTerminalOrder",
+        "title": "Save terminal order",
+        "category": "tmux"
+      },
+      {
         "command": "tmux-integrated.newTerminal",
         "title": "New tmux Terminal",
         "category": "tmux"
@@ -65,7 +70,7 @@
       ]
     },
     "configuration": {
-      "title": "tmux-integrated",
+      "title": "tmux Persistent Terminals",
       "properties": {
         "tmux-integrated.sessionName": {
           "type": "string",
@@ -87,6 +92,11 @@
           "default": true,
           "description": "Automatically connect to existing tmux sessions associated with the workspace when VS Code opens."
         },
+        "tmux-integrated.showAutomaticRename": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show tmux's automatic window name in the terminal tab so the title tracks the foreground process (like a regular VS Code terminal). When disabled (the default), managed windows are pinned to stable 'tmux:<index>'-style labels. Explicit renames (the built-in Rename action or 'Rename tmux Terminal') always pin the name for that window; with this setting enabled, submitting an empty name in 'Rename tmux Terminal' returns the window to automatic naming. Takes effect for terminals created or adopted after the change."
+        },
         "tmux-integrated.closeStrayShellsOnActivation": {
           "type": "boolean",
           "default": true,
@@ -105,7 +115,8 @@
     "version": "npm run changelog && git add CHANGELOG.md",
     "release:beta": "node scripts/release.js beta",
     "release:stable": "node scripts/release.js stable",
-    "release": "node scripts/release.js stable"
+    "release": "node scripts/release.js stable",
+    "package:release": "node scripts/package-release.js"
   },
   "devDependencies": {
     "@types/node": "^20.19.41",
@@ -118,5 +129,9 @@
   },
   "dependencies": {
     "node-pty": "1.2.0-beta.13"
+  },
+  "homepage": "https://github.com/Roland013/tmux-persistent-terminals#readme",
+  "bugs": {
+    "url": "https://github.com/Roland013/tmux-persistent-terminals/issues"
   }
 }

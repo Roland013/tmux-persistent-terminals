@@ -4,8 +4,8 @@ Guidance for AI coding agents working in this repository.
 
 ## Project overview
 
-`tmux-integrated` is a VS Code extension that provides seamless tmux integration
-for VS Code terminals via tmux's control mode (`-CC`). See [`README.md`](README.md)
+`tmux-persistent-terminals` is an independent fork of the tmux-integrated
+VS Code extension. It connects terminals through tmux control mode (`-CC`). See [`README.md`](README.md)
 for user-facing docs and [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for design.
 
 ## Repository layout
@@ -16,6 +16,7 @@ for user-facing docs and [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) for design
 | `src/tmuxGateway.ts` | High-level session/window orchestration |
 | `src/tmuxControlClient.ts` | tmux `-CC` control-mode protocol client |
 | `src/tmuxTerminalProvider.ts` | VS Code `Pseudoterminal` implementation |
+| `src/terminalOrder.ts` | Explicit visual panel-order scan for Save terminal order |
 | `src/windowTitle.ts` | Window/title helpers |
 | `out/` | Compiled JS output (do not edit, gitignored) |
 | `scripts/release.js` | Computes the next version per channel and cuts the release |
@@ -95,10 +96,11 @@ npm run release:stable    # ship / promote to stable  (`npm run release` aliases
 
 Pushing the `v*` tag triggers
 [`.github/workflows/release.yml`](.github/workflows/release.yml), which derives
-the channel from the version's minor parity, packages the extension (with
-`--pre-release` for beta), publishes the same `.vsix` to the VS Code Marketplace
-and Open VSX (when `VSCE_PAT` / `OVSX_PAT` are configured), and creates a GitHub
-Release (a pre-release for beta) with the `.vsix` attached.
+the channel from the version's minor parity, runs tests and lint, packages the
+installer with its notices and corresponding source (`--pre-release` for beta),
+and creates a fork GitHub Release (a pre-release for beta). No Marketplace
+or Open VSX publication is configured. Preserve the `tmux-integrated.*` setting
+and command IDs and require users to disable the original extension.
 
 ### Preview the next version or changelog without releasing
 
@@ -119,6 +121,6 @@ Before running a release command:
 
 ### If CI fails after the tag is pushed
 
-Fix the workflow or tokens and re-run the release job from GitHub Actions, or
+Fix the workflow and re-run the release job from GitHub Actions, or
 publish locally per [`doc/RELEASE.md`](doc/RELEASE.md) §Manual recovery.
 Do **not** delete and recreate the tag once it has been pushed.

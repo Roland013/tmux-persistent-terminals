@@ -19,6 +19,7 @@ import { execFileSync } from 'child_process';
 
 import { TmuxControlClient, CommandFlags } from './tmuxControlClient';
 import { TmuxTerminal } from './tmuxTerminalProvider';
+import { capturePanelTerminalOrder } from './terminalOrder';
 
 interface AttachWindowItem extends vscode.QuickPickItem {
     windowId: string;
@@ -64,6 +65,8 @@ const terminalPtyByTerminal = new Map<vscode.Terminal, TmuxTerminal>();
 const pendingTerminalPtys: TmuxTerminal[] = [];
 let activeTmuxWindowId: string | null = null;
 let pendingUserTerminalFocus: boolean = false;
+/** Suppress ordinary focus synchronization while the explicit order scan navigates tabs. */
+let savingTerminalOrder = false;
 
 // ---------------------------------------------------------------------------
 // Activation / deactivation
@@ -92,6 +95,10 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     // --- Clean up when the extension host shuts down ----------------------
     // Note: we do NOT disconnect from tmux — we want sessions to outlive VS Code.
+    // `disposing` is only a secondary guard on the kill path: a remote host may
+    // drop the workbench connection without ever deactivating us, so
+    // TmuxTerminal decides a window's fate from the terminal's exit reason
+    // rather than from whether this ran in time.
     context.subscriptions.push({
         dispose: () => {
             disposing = true;
@@ -120,11 +127,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     //   - `terminal.integrated.defaultProfile.<os>` === `tmux-integrated`
     //     (so users who deliberately mix profiles are never affected)
     //
-    // Any tab that does not look like one of ours (`tmux` or `tmux:N`)
-    // is treated as a stray when both gates are satisfied. Restored
-    // tmux-backed tabs go through `provideTerminalProfile` and acquire
-    // a TmuxTerminal pty, so they are never disposed here.
-    const stray = vscode.window.terminals.filter((t) => !looksLikeTmuxTerminal(t));
+    // Terminal labels are not ownership: another extension can own a tab
+    // named "bash", and a tmux window can have any user-assigned name.
+    const stray = vscode.window.terminals.filter((t) => !isExtensionOwnedTerminal(t));
     if (stray.length > 0) {
         const cfgRoot = vscode.workspace.getConfiguration('tmux-integrated');
         const closeStray = cfgRoot.get<boolean>('closeStrayShellsOnActivation', true);
@@ -164,8 +169,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }
 }
 
-export function deactivate(): void {
+export async function deactivate(): Promise<void> {
     disposing = true;
+    await flushRenames();
     terminalPtyByTerminal.clear();
     pendingTerminalPtys.length = 0;
     activeTmuxWindowId = null;
@@ -185,18 +191,23 @@ function registerTerminalRenameSync(context: vscode.ExtensionContext): void {
         }
 
         terminalPtyByTerminal.set(terminal, pty);
-        // Detect built-in "Rename…" the instant the user types in this terminal.
+        // Detect built-in "Rename…" the instant the user types in this
+        // terminal. The pty classifies terminal.name itself so that stale
+        // titles (VS Code applying our own rename asynchronously) are never
+        // mistaken for user renames and pushed back to tmux.
         pty.setOnInputCallback(() => {
-            const lastEmitted = pty!.getLastEmittedName();
-            if (lastEmitted !== null && terminal.name !== lastEmitted) {
-                void pty!.syncNameToTmux(terminal.name);
-            }
+            pty!.maybeSyncNameFromVsCode(terminal.name);
         });
         return pty;
     };
 
     const untrackTerminal = (terminal: vscode.Terminal): void => {
+        const pty = terminalPtyByTerminal.get(terminal) ?? getTmuxPtyFromTerminal(terminal);
         terminalPtyByTerminal.delete(terminal);
+        // Hand the pty the reason VS Code gives for the tab disappearing so it
+        // can tell a deliberate close (kill the tmux window) from a window
+        // reload or workspace switch (keep it). See TmuxTerminal.close().
+        pty?.noteTerminalExitReason(terminal.exitStatus?.reason);
     };
 
     const syncActiveTerminalToTmuxWindow = async (terminal: vscode.Terminal | undefined): Promise<void> => {
@@ -208,6 +219,10 @@ function registerTerminalRenameSync(context: vscode.ExtensionContext): void {
         if (!pty) {
             return;
         }
+
+        // Focus change is a second chance to catch a built-in "Rename…" that
+        // happened while the user never typed in the terminal afterwards.
+        pty.maybeSyncNameFromVsCode(terminal.name);
 
         const windowId = pty.getAttachedTmuxWindowId();
         if (!windowId || windowId === activeTmuxWindowId) {
@@ -228,16 +243,47 @@ function registerTerminalRenameSync(context: vscode.ExtensionContext): void {
         vscode.window.onDidOpenTerminal((terminal) => {
             trackTerminal(terminal);
             // VS Code may not focus terminal when it is opened
-            if(pendingUserTerminalFocus && looksLikeTmuxTerminal(terminal)) {
+            if (pendingUserTerminalFocus && isTmuxTerminal(terminal)) {
                 terminal.show();
                 pendingUserTerminalFocus = false;
             }
         }),
-        vscode.window.onDidCloseTerminal(untrackTerminal),
+        vscode.window.onDidCloseTerminal((terminal) => {
+            void syncTerminalName(terminal);
+            untrackTerminal(terminal);
+        }),
         vscode.window.onDidChangeActiveTerminal((terminal) => {
+            if (savingTerminalOrder) {
+                return;
+            }
+            void flushRenames();
             void syncActiveTerminalToTmuxWindow(terminal);
         }),
+        vscode.window.onDidChangeWindowState(() => {
+            void flushRenames();
+        }),
     );
+}
+
+/** Catch built-in renames without duplicating the PTY's title classification. */
+async function syncTerminalName(terminal: vscode.Terminal): Promise<void> {
+    const pty = terminalPtyByTerminal.get(terminal) ?? getTmuxPtyFromTerminal(terminal);
+    await pty?.maybeSyncNameFromVsCode(terminal.name);
+}
+
+/** Finish pending tab-name writes before disconnecting the control client. */
+async function flushRenames(): Promise<void> {
+    await Promise.all([...terminalPtyByTerminal.keys()].map(syncTerminalName));
+}
+
+/** Preserve terminals owned by any extension during the stray-shell sweep. */
+function isExtensionOwnedTerminal(terminal: vscode.Terminal): boolean {
+    return !!terminal.creationOptions && 'pty' in terminal.creationOptions;
+}
+
+/** Identify this extension's terminals independently of their visible labels. */
+function isTmuxTerminal(terminal: vscode.Terminal): boolean {
+    return terminalPtyByTerminal.has(terminal) || getTmuxPtyFromTerminal(terminal) !== null;
 }
 
 function getTmuxPtyFromTerminal(terminal: vscode.Terminal): TmuxTerminal | null {
@@ -327,6 +373,43 @@ function registerTerminalProfile(context: vscode.ExtensionContext): void {
 
 function registerCommands(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
+        vscode.commands.registerCommand('tmux-integrated.saveTerminalOrder', async () => {
+            if (savingTerminalOrder) {
+                return;
+            }
+            const owned = vscode.window.terminals.filter(t => getTmuxPtyFromTerminal(t));
+            const connectedClient = client;
+            if (!connectedClient?.isConnected() || owned.length === 0) {
+                vscode.window.showWarningMessage('Open your tmux terminals before saving their order.');
+                return;
+            }
+            const original = vscode.window.activeTerminal;
+            savingTerminalOrder = true;
+            try {
+                await flushRenames();
+                const ordered = (await capturePanelTerminalOrder()).filter(t => owned.includes(t));
+                if (ordered.length !== owned.length) {
+                    throw new Error('Keep each tmux terminal in its own terminal-panel tab before saving the order.');
+                }
+                const ids = ordered.map(t => getTmuxPtyFromTerminal(t)?.getAttachedTmuxWindowId())
+                    .filter((id): id is string => !!id);
+                if (ids.length !== ordered.length) {
+                    throw new Error('Some terminals are still connecting. Please save again after they open.');
+                }
+                await connectedClient.saveWindowOrder(ids);
+                vscode.window.showInformationMessage(`Saved order of ${ids.length} tmux terminals.`);
+            } catch (err) {
+                log(`Save terminal order failed: ${err}`);
+                vscode.window.showErrorMessage(`Could not save terminal order: ${err instanceof Error ? err.message : String(err)}`);
+            } finally {
+                // The scan's focus changes are excluded from normal tmux focus sync.
+                const id = original && getTmuxPtyFromTerminal(original)?.getAttachedTmuxWindowId();
+                if (id && connectedClient.isConnected()) {
+                    await connectedClient.sendCommand(`select-window -t ${id}`, CommandFlags.TolerateErrors).catch(() => {});
+                }
+                savingTerminalOrder = false;
+            }
+        }),
         vscode.commands.registerCommand('tmux-integrated.newTerminal', async () => {
             const startDirectory = await pickStartDirectory(extensionRootPath);
             if (!startDirectory) { return; }
@@ -352,12 +435,23 @@ function registerCommands(context: vscode.ExtensionContext): void {
                 vscode.window.showWarningMessage('tmux-integrated: active terminal is not a tmux window.');
                 return;
             }
+            // In showAutomaticRename mode an empty name is meaningful: it
+            // hands the title back to tmux's automatic naming.
+            const allowReset = pty.isAutomaticRenameMode();
             const newName = await vscode.window.showInputBox({
-                prompt: 'New tmux window / VS Code tab name',
+                prompt: allowReset
+                    ? 'New tmux window / VS Code tab name (leave empty to return to automatic naming)'
+                    : 'New tmux window / VS Code tab name',
                 value: terminal.name,
-                validateInput: (v) => v.trim() ? null : 'Name cannot be empty',
+                validateInput: allowReset ? undefined : (v) => v.trim() ? null : 'Name cannot be empty',
             });
             if (newName === undefined) { return; }
+            if (!newName.trim()) {
+                if (allowReset) {
+                    await pty.resetToAutomaticRename();
+                }
+                return;
+            }
             await pty.renameWindow(newName);
         }),
     );
@@ -526,12 +620,14 @@ function buildTerminalOptions(
 ): vscode.ExtensionTerminalOptions {
     const cfg = vscode.workspace.getConfiguration('tmux-integrated');
     const shell = (cfg.get<string>('shell') || process.env.SHELL || '/bin/bash') || undefined;
+    const showAutomaticRename = cfg.get<boolean>('showAutomaticRename', false);
 
     const pty = new TmuxTerminal(
         client!,
         startDirectory,
         collectVscodeEnvVars(),
         shell || undefined,
+        showAutomaticRename,
         existingWindow,
         {
             onWindowAttached: (windowId) => {
@@ -547,7 +643,7 @@ function buildTerminalOptions(
     registerPendingTerminalPty(pty);
 
     return {
-        name: existingWindow?.windowIndex !== undefined ? `tmux:${existingWindow.windowIndex}` : 'tmux',
+        name: pty.getInitialTabName(),
         pty,
     };
 }
@@ -855,7 +951,7 @@ async function autoConnectExistingSession(): Promise<void> {
     // is still something to adopt — otherwise the listener does nothing
     // and we exit on the initial grace.
     disposable = vscode.window.onDidOpenTerminal((terminal) => {
-        if (windowsToAdopt.length > 0 && looksLikeTmuxTerminal(terminal)) {
+        if (windowsToAdopt.length > 0 && isTmuxTerminal(terminal)) {
             armTimer(AUTO_CONNECT_QUIET_GRACE_MS, 'quiet grace expired after VS Code restore');
         }
     });

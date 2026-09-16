@@ -5,59 +5,51 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
     steps:
-      - name: Checkout
+      - name: Checkout release source
         uses: actions/checkout@v6
-
-      - name: Setup Node.js
+        with:
+          fetch-depth: 0
+      - name: Set up Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
-
+      - name: Verify tag and extension identity
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node -e 'const p=require("./package.json"); if (process.env.RELEASE_TAG !== `v${p.version}` || p.name !== "tmux-persistent-terminals" || p.publisher !== "Roland013") process.exit(1)'
+      - name: Install tmux for isolated integration tests
+        run: sudo apt-get update && sudo apt-get install -y tmux
       - name: Install dependencies
         run: npm ci
-
+      - name: Run compatibility checks
+        run: |
+          node -e 'require("node-pty"); require("node:child_process").execFileSync("tmux", ["-V"])'
+          npm test
+          npm run lint
+      - name: Package installer and matching source
+        run: npm run package:release
       - name: Determine release channel
         id: channel
-        run: |
-          VERSION=$(node -p "require('./package.json').version")
-          MINOR=$(printf '%s' "$VERSION" | cut -d. -f2)
-          if [ "$((MINOR % 2))" -eq 1 ]; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "Channel: beta (pre-release) for $VERSION (odd minor)"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
-            echo "Channel: stable for $VERSION (even minor)"
-          fi
-
-      - name: Package extension
-        run: |
-          PRE=""
-          if [ "${{ steps.channel.outputs.prerelease }}" = "true" ]; then PRE="--pre-release"; fi
-          npx vsce package $PRE -o tmux-integrated.vsix
-
-      - name: Publish extension to VS Code Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx vsce publish --packagePath tmux-integrated.vsix
-        continue-on-error: true
-
-      - name: Publish extension to Open VSX
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx ovsx publish tmux-integrated.vsix -p "$OVSX_PAT"
-        continue-on-error: true
-
-      - name: Create GitHub Release
+        run: node -e 'const fs=require("fs"); const p=require("./package.json"); fs.appendFileSync(process.env.GITHUB_OUTPUT, `prerelease=${Number(p.version.split(".")[1]) % 2 === 1}\n`)'
+      - name: Create fork GitHub release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.ref_name }}
-          files: '*.vsix'
+          name: tmux Persistent Terminals ${{ github.ref_name }}
+          files: |
+            dist/*.vsix
+            dist/*-source.tar.gz
+            dist/SHA256SUMS
+          fail_on_unmatched_files: true
           prerelease: ${{ steps.channel.outputs.prerelease }}
-          generate_release_notes: true
+          body_path: doc/RELEASE_NOTES.md
