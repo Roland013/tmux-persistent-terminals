@@ -1,7 +1,7 @@
 # tmux Persistent Terminals for VS Code
 
-Use tmux through familiar VS Code terminal tabs. Keep programs running when you
-disconnect, and return to the same terminals when you reconnect.
+Use tmux in VS Code terminal tabs and keep them running when you
+disconnect and return to the same terminals when you reconnect.
 
 This is an independent fork of [tmux-integrated](https://github.com/pcassidy75/tmux-integrated).
 It includes newer upstream fixes plus the additional changes described below.
@@ -16,7 +16,7 @@ You can also [build an installer from source](doc/RELEASE.md#build-an-installer-
 
 This download installs **this fork**. The original `pcassidy75.tmux-integrated`
 Marketplace listing installs the original project. This fork is distributed
-through GitHub Releases; it does not yet have its own Marketplace listing.
+through GitHub Releases; it does not have its own VS Code marketplace listing.
 
 ### 1. Install tmux where your terminals run
 
