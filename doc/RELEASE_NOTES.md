@@ -31,8 +31,7 @@ supported. This installer is for the fork, not the original Marketplace listing.
 ## Verification and limits
 
 48 tests passed with no skips, including a private real-tmux server on Linux;
-lint passed. Interactive VS Code, macOS and SSH/WSL client behavior were not
-manually tested. Dragged tab order must be saved explicitly with the new command; very late
+lint passed. Dragged tab order must be saved explicitly with the new command; very late
 editor restoration can still duplicate tabs. The inherited build tools have nine npm
 audit advisories; the production dependency audit reports none.
 

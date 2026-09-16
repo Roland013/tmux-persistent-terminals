@@ -8,13 +8,11 @@ It includes newer upstream fixes plus the additional changes described below.
 
 ## Install this fork
 
-**Release status:** the source for version 0.3.4 is available in this repository.
-The installer release has not been published. The download links below become available after
-release; for now, use the [build instructions](doc/RELEASE.md#build-an-installer-yourself).
-
 **Download:** [Installer for version 0.3.4 (pre-release)](https://github.com/Roland013/tmux-persistent-terminals/releases/download/v0.3.4/tmux-persistent-terminals-0.3.4.vsix)
 
 [Release notes and matching source code](https://github.com/Roland013/tmux-persistent-terminals/releases/tag/v0.3.4)
+
+You can also [build an installer from source](doc/RELEASE.md#build-an-installer-yourself).
 
 This download installs **this fork**. The original `pcassidy75.tmux-integrated`
 Marketplace listing installs the original project. This fork is distributed

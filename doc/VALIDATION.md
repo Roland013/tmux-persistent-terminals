@@ -54,5 +54,5 @@ IDs, reconnects a new control client, and verifies the saved order again.
 visually tested in the Windows VS Code client. The public success message has no
 dependency on the private recovery helper used by the original local build.
 
-Version 0.3.4 remains an unpublished release candidate. Merging the source does
-not publish an installer; release publication requires separate authorization.
+Version 0.3.4 uses GitHub's pre-release designation. The release includes the
+installer, matching source archive, and checksums.
