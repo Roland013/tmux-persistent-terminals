@@ -7,11 +7,11 @@ A future Marketplace listing needs a registered publisher controlled by this pro
 
 ## Build an installer yourself
 
-Use Node.js 24, npm, and Git. While PR #1 is still a draft, clone its branch
-explicitly: the default branch does not contain this fork release yet. Run:
+Use Node.js 24, npm, and Git. Clone the default branch to build the current
+fork source. Building an installer does not publish a release. Run:
 
 ```bash
-git clone --branch fix/tab-name-and-order-persistence https://github.com/Roland013/tmux-persistent-terminals.git
+git clone https://github.com/Roland013/tmux-persistent-terminals.git
 cd tmux-persistent-terminals
 npm ci
 npm test

@@ -8,8 +8,8 @@ It includes newer upstream fixes plus the additional changes described below.
 
 ## Install this fork
 
-**Release status:** version 0.3.4 is being prepared in [draft PR #1](https://github.com/Roland013/tmux-persistent-terminals/pull/1).
-It has not been published. The download links below become available after
+**Release status:** the source for version 0.3.4 is available in this repository.
+The installer release has not been published. The download links below become available after
 release; for now, use the [build instructions](doc/RELEASE.md#build-an-installer-yourself).
 
 **Download:** [Installer for version 0.3.4 (pre-release)](https://github.com/Roland013/tmux-persistent-terminals/releases/download/v0.3.4/tmux-persistent-terminals-0.3.4.vsix)
